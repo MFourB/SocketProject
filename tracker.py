@@ -61,10 +61,17 @@ def de_register(player, IPv4, t_port):
     return status_Code
 
 
-def queryPlayers():
-    queriedPlayers = json.dumps(players_Data)
+def query_Players():
+    queried_Players = json.dumps(players_Data)
     #print(queriedPlayers)
-    status_Code = "SUCCESS.|query-players.|players retrieved.|"+queriedPlayers
+    status_Code = "SUCCESS.|query-players.|players retrieved.|"+queried_Players
+    print(status_Code)
+    return status_Code
+
+def query_Games():
+    queried_Games = json.dumps(games_Data)
+    #print(queried_Games)
+    status_Code = "SUCCESS.|query-games.|games retrieved.|"+queried_Games
     print(status_Code)
     return status_Code
 
@@ -89,18 +96,22 @@ while True:
             
             response = register(player, *clientAddress)
             serverSocket.sendto(response.encode(),
-                                      clientAddress)
+                                      clientAddress)     
         
         case "query-players":
             print("querying players")
-            response = queryPlayers()
+            response = query_Players()
 
             serverSocket.sendto(response.encode(), clientAddress)
 
-        case "start-game":
-            print("starting game")
         case "query-games":
             print("querying games")
+            response = query_Games()
+
+            serverSocket.sendto(response.encode(), clientAddress)
+            
+        case "start-game":
+            print("starting game")   
         case "end":
             print("ending game")
         case "de-register":

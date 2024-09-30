@@ -43,8 +43,8 @@ def displayHomeMenu():
     print("Input the desired option that follows")
     #print("register (Player name)")
     print("query-players")
-    print("start-game (player), (number of players), (number of holes)")
     print("query-games")
+    print("start-game (player), (number of players), (number of holes)")
     print("de-register (player)")
 
     homeMenuInputs()
@@ -63,6 +63,15 @@ def homeMenuInputs():
         print("\nNumber of Players:", players_Data["Number_Of_Players"],"""\n--------------""")
         for player in players_Data["Players"]:
             print(player)
+        print()
+        homeMenuInputs()
+    
+    elif responseFormated["response_Command"] == "query-games":
+        games_Data = json.loads(responseFormated["response_Data"])
+
+        print("\nNumber of Games:", games_Data["Number_Of_Games"],"""\n--------------""")
+        for game in games_Data["Games"]:
+            print(game)
         print()
         homeMenuInputs()
 
