@@ -1,0 +1,101 @@
+    query-games: The client sends the query-games
+    request. The server will JSON dump the games data,
+    which contains the number of games and the
+    list of games. Then will send this data
+    back to the user.
+
+    
+# Please enter the commit message for your changes. Lines starting
+# with '#' will be ignored, and an empty message aborts the commit.
+#
+# On branch main
+# Your branch is up to date with 'origin/main'.
+#
+# Changes to be committed:
+#	modified:   player.py
+#	modified:   tracker.py
+#
+
+tracker.py
+----------
+The server can receive the following commands from
+the client:
+    register (player): The client sends the 
+    register command with their player name concatinated
+    directly after. Then the server performs a check
+    that a valid player name has been given. The
+    server will then check to see if the player name
+    is already taken. If so, the server will send
+    a message to the client that the player name is taken.
+    If not, then the server will add a dictionary to the
+    players dictionary. The player name is the 
+    key with 2 values called, "status" and "t-port". 
+    The status is currently defaulted with "free".
+    The number of player of players is then incremented
+    by 1. Then a response is sent back to the user
+    indicating either the failure or success of
+    adding their player name to the game.
+
+    de-register (player): The client sends the 
+    de-register command with their player name concatinated
+    directly after. Then the server performs a check
+    that a valid player name has been given. Then
+    it checks to see if the player exists in the
+    players list. Then it checks that the player
+    requesting to de-register a user has the same
+    t-port associated with the player in the list.
+    Then the server removes the player from the list
+    and decrements the number of players.
+    
+    query-players: The client sends the query-players
+    request. The server will JSON dump the players data,
+    which contains the number of players and the
+    list of players. Then will send this data
+    back to the user. 
+
+
+player.py
+---------
+On opening of the application, the player is prompted
+to register a player name. Once given, the client
+sends the request to the server. The server will
+provide a response. 
+The client will then segment the
+data chunks into four categories: response_Status_Code,
+response_Command, responseMessage, and responseData.
+The response_Status_Code will decide whether to continue
+exchanges. If there is a failure, the application will close.
+If there is a success, the application will move forward.
+The response_Command lets the client know what command
+the server responded to. The responseMessage tells
+the client, in more detail, what had taken place
+with the client-server exchange. The responseData
+may contain complex data structures. 
+The client will
+then be prompted with various options such as: query-players,
+start-game, query-games, and de-register. 
+The following options will perform the following
+    query-players: When the players sends a query-players
+    request to the server. The server will return a
+    response and segmented by the client. The responseData
+    will contain the number of registered players and
+    the list of players registered. Then the numbered
+    of registered players is displayed to the user.
+    As well as the list of players.
+
+    query-games: When the players sends a query-games
+    request to the server. The server will return a
+    response and segmented by the client. The responseData
+    will contain the number of in-progress games and
+    the list of games in-progress. Then the numbered
+    of in-progress games is displayed to the user.
+    As well as the list of in-progress games.
+
+    de-register: The user sends their player name
+    to the server to have them removed from the 
+    registered player list. A response is returned
+    on the success or failure of this request.
+
+In the case that the server remains unresponsive for A
+command for a certain amount of time. The client 
+socket will timeout and cancel the request.
