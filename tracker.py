@@ -1,134 +1,319 @@
 from socket import *
 import json
+import threading
+import os
+import uuid
 
 serverPort = 1000
 
 serverSocket = socket(AF_INET, SOCK_DGRAM)
-serverSocket.bind(('', serverPort))
+serverSocket.bind(('192.168.1.2', serverPort))
+serverSocket.settimeout(1)
 
-players_Data = {
-    "Number_Of_Players": 0,
-    "Players": {}
-}
+class Players_Queue:
+    Players_Queue = []
+    @classmethod
+    def add_Player(self, player):
+        self.Players_Queue.append(player)
+        player.queue_Placement = len(self.Players_Queue)
 
-games_Data = {
-    "Number_Of_Games": 0,
-    "Games": {}
-}
+    '''
+    @classmethod
+    def remove_Player(self, player):
+        #self.Players_Queue[player.queue_Placement-1:].queue_Placement -= 1
+        #print([player.__dict__ for player in self.Players_Queue])
 
-def register(player, IPv4, t_port):
-    if not (player and IPv4 and t_port):
+        for index in range(player.queue_Placement-1, len(self.Players_Queue)):
+            self.Players_Queue[index].queue_Placement -= 1
+            print(index)
+
+        #print([player.__dict__ for player in self.Players_Queue])
+
+        self.Players_Queue.remove(player)
+        #print(player.queue_Placement)
+    '''
+    @classmethod
+    def consume_Next_Player(self):
+        try:
+            player = self.Players_Queue[0]
+        except IndexError:
+            print("No players in Player Queue!")
+            return False
+        
+        for index in range(player.queue_Placement-1, len(self.Players_Queue)):
+            self.Players_Queue[index].queue_Placement -= 1
+        
+        print("Consuming Next Player")
+        return self.Players_Queue.pop(0)
+
+    @classmethod
+    def consume_Player(self, player):
+        for index in range(player.queue_Placement-1, len(self.Players_Queue)):
+            self.Players_Queue[index].queue_Placement -= 1
+            print("Consuming")
+        
+        self.Players_Queue.remove(player)
+        
+    @classmethod
+    def size(self):
+        return len(self.Players_Queue)
+
+class Players_Data:
+    Number_Of_Players = 0
+    Players = {}
+
+    @classmethod
+    def toJSON(self):
+        return json.dumps({
+            "Number_Of_Players": self.Number_Of_Players,
+            "Players": {player: self.Players[player].__dict__ for player in self.Players}
+        })
+
+class Games_Data:
+    Number_Of_Games = 0
+    Games = {}
+
+    @classmethod
+    def toJSON(self):
+        formatting = {
+            "Number_Of_Games": self.Number_Of_Games,
+            "Games": [self.Games[game].toDict() for game in self.Games]
+        }
+        #for game in formatting["Games"]:
+            #formatting["Games"][game] = [player.toJSON()\ for player in formatting["Games"][game]["Players"]]
+        
+        """
+        for game in formatting["Games"]:
+            for player in formatting["Games"][game]["Players"]:
+                print(player)
+        """
+
+        return json.dumps(formatting)
+
+class Player(object):
+    def __init__(self):
+        self.name = ""
+        self.status = "free"
+        self.p_port = ""
+        self.queue_Placement = 0
+        self.role = ""
+
+class Game(object):
+    def __init__(self):
+        self.id = str(uuid.uuid4())
+        self.Players = []
+        self.status = "Starting"
+
+    def toDict(self):
+        return {
+            "id": self.id,
+            "Players": [player.__dict__ for player in self.Players],
+            "status": self.status,
+        }
+    def add_Player(self, player, status, role):
+        player.status = status
+        player.role = role
+        self.Players.append(player)
+
+
+def send_Server_Response(message):
+    serverSocket.sendto(message.encode(), clientAddress)   
+
+def verify_Player(player, p_port, command):
+    if not player in Players_Data.Players:
+        status_Code = f"FAILURE.|{command}.|{player} is not registered!.|"
+        send_Server_Response(status_Code) 
+        print(status_Code)
+        return False
+    elif not Players_Data.Players[player].p_port == p_port:
+        status_Code = f"FAILURE.|{command}.|{command} request is not coming from {player}!.|"
+        send_Server_Response(status_Code) 
+        print(status_Code)
+        return False
+    elif Players_Data.Players[player].status == "in-play":
+        status_Code = f"FAILURE.|{command}.|{player} is in a game!.|"
+        send_Server_Response(status_Code) 
+        print(status_Code)
+        return False
+    
+    return True
+
+def register(player="", IPv4="", p_port=""):
+    if not (player and IPv4 and p_port):
         print("Invalid arguments")
 
-    print("Registering", player, IPv4, t_port)
+    print("Registering", player, IPv4, p_port)
 
     status_Code = ""
 
-    if player in players_Data["Players"]:
+    if player in Players_Data.Players:
         status_Code = f"FAILURE.|register.|{player} already exists!.|"
+        send_Server_Response(status_Code) 
         print(status_Code)
-        return status_Code
+        return False
+    elif len(player) == 0:
+        status_Code = f"FAILURE.|register.|Name can't be empty!.|"
+        send_Server_Response(status_Code) 
+        print(status_Code)
+        return False
 
-    players_Data["Players"][player] = {
-        "status": "free",
-        "t-port": t_port
-    }
-    players_Data["Number_Of_Players"] += 1
+    newPlayer = Player()
+    newPlayer.name = player
+    newPlayer.status = "free"
+    newPlayer.p_port = p_port
+    newPlayer.queue_Placement = Players_Queue.size()
+    Players_Queue.add_Player(newPlayer)
+
+    Players_Data.Number_Of_Players += 1
+    Players_Data.Players[newPlayer.name] = newPlayer
 
     status_Code = f"SUCCESS.|register.|{player} are registered!.|"
-    print(status_Code)
-    return status_Code
 
-def de_register(player, IPv4, t_port):
-    if not player in players_Data["Players"]:
-        status_Code = f"FAILURE.|de-register.|{player} is not registered!.|"
-        print(status_Code)
-        return status_Code
-    elif not players_Data["Players"][player]["t-port"] == t_port:
-        status_Code = f"FAILURE.|de-register.|De-register request is not coming from {player}!.|"
-        print(status_Code)
-        return status_Code
-    elif players_Data["Players"][player]["status"] == "in-play":
-        status_Code = f"FAILURE.|de-register.|{player} is in a game!.|"
-        print(status_Code)
-        return status_Code
+    send_Server_Response(status_Code) 
+
+    print(status_Code)
+
+def de_register(player, IPv4, p_port):
+    if not verify_Player(player, p_port, "de-register"):
+        return False
     
-    del players_Data["Players"][player]
-    players_Data["Number_Of_Players"] -= 1
+    player = Players_Data.Players[player]
+    Players_Queue.consume_Player(player)
+    del Players_Data.Players[player.name]
+    Players_Data.Number_Of_Players -= 1
 
-    status_Code = f"SUCCESS.|de-register.|{player} has been de-registered!.|"
+    status_Code = f"SUCCESS.|de-register.|{player.name} has been de-registered!.|"
+    send_Server_Response(status_Code) 
+
     print(status_Code)
-    return status_Code
 
 
 def query_Players():
-    queried_Players = json.dumps(players_Data)
-    #print(queriedPlayers)
-    status_Code = "SUCCESS.|query-players.|players retrieved.|"+queried_Players
-    print(status_Code)
-    return status_Code
+    queried_Players = Players_Data.toJSON()
+    status_Code = "SUCCESS.|query-players.|players retrieved.|"+queried_Players 
+    send_Server_Response(status_Code) 
+    
+    print(status_Code)                
 
 def query_Games():
-    queried_Games = json.dumps(games_Data)
-    #print(queried_Games)
+    queried_Games = Games_Data.toJSON()
     status_Code = "SUCCESS.|query-games.|games retrieved.|"+queried_Games
+    send_Server_Response(status_Code) 
+
     print(status_Code)
-    return status_Code
 
-while True:
-    try:
-        message, clientAddress = serverSocket.recvfrom(2048)
-    except KeyboardInterrupt:
-        serverSocket.close()
-        print("Exiting")
+def start_Game(player, num_Of_Additional_Players, num_Of_Holes, IPv4, p_port):
+    if not player or not num_Of_Additional_Players or not num_Of_Holes:
+        status_Code = "FAILURE.|start-game.|Invalid Game Parameters!.|"
+        send_Server_Response(status_Code)
+        return False
+    elif num_Of_Additional_Players < 1 or num_Of_Additional_Players > 3:
+        status_Code = "FAILURE.|start-game.|Number of Additional Players is out of range!\nMust be more than 0 and less than 4.|"
+        send_Server_Response(status_Code)
+        return False
+    elif num_Of_Holes < 1 or num_Of_Holes > 9:
+        status_Code = "FAILURE.|start-game.|Number of Holes is out of range!\nMust be more than 0 and less than 10.|"
+        send_Server_Response(status_Code)
+        return False
+    elif num_Of_Additional_Players > len(Players_Queue.Players_Queue)-1:
+        status_Code = "FAILURE.|start-game.|Not enough players for this request!\nReduce the number of requested players!.|"
+        send_Server_Response(status_Code)
+        return False
+    elif not verify_Player(player, p_port, "start-game"):
+        return False
 
-    commands_and_parameters = message.decode().lower().split(' ')
-    command = commands_and_parameters[0]
-    parameters = commands_and_parameters [1:]
+    newGame = Game()
+    Games_Data.Games[newGame.id] = newGame
+    Games_Data.Number_Of_Games += 1
+
+    player = Players_Data.Players[player]
+
+    newGame.add_Player(player, "in-play", "Dealer")
+    Players_Queue.consume_Player(player)
     
-    match command:
-        case "register":
-            try:
-                player = parameters[0]
-            except IndexError:
-                print("No player name given")
-                continue
-            
-            response = register(player, *clientAddress)
-            serverSocket.sendto(response.encode(),
-                                      clientAddress)     
+    for index in range(0, num_Of_Additional_Players):
+        newPlayer = Players_Queue.consume_Next_Player()
+        newGame.add_Player(newPlayer, "in-play", "Player")
+        #Players_Queue.consume_Next_Player()
+        print("Adding Player", newPlayer)
+
+    #for index in range(0,)
+
+    status_Code = "SUCCESS.|start-game.|games has started.|"
+
+    send_Server_Response(status_Code) 
+
+    print(status_Code, player, Players_Queue.size(), num_Of_Additional_Players)
+
+try:
+    while True:
+        try:
+            message, clientAddress = serverSocket.recvfrom(2048)
+        except TimeoutError:
+            continue
+
+        commands_and_parameters = message.decode().lower().split(' ')
+        command = commands_and_parameters[0]
+        parameters = commands_and_parameters [1:]
         
-        case "query-players":
-            print("querying players")
-            response = query_Players()
-
-            serverSocket.sendto(response.encode(), clientAddress)
-
-        case "query-games":
-            print("querying games")
-            response = query_Games()
-
-            serverSocket.sendto(response.encode(), clientAddress)
+        match command:
+            case "register":
+                try:
+                    player = parameters[0]
+                except IndexError:
+                    print("No player name given")
+                    continue
+                
+                register(player, *clientAddress)
             
-        case "start-game":
-            print("starting game")   
-        case "end":
-            print("ending game")
-        case "de-register":
-            print("De-registering")
-            try:
-                player = parameters[0]
-            except IndexError:
-                print("No player name given")
-                continue
-            
-            response = de_register(player, *clientAddress)
-            serverSocket.sendto(response.encode(), clientAddress)
-        case _:
-            status_Code = "FAILURE.|command.|Invalid command.|"
-            print(status_Code)
-            serverSocket.sendto(status_Code.encode(), clientAddress)
+            case "query-players":
+                print("querying players")
+                query_Players()
 
-    
+            case "query-games":
+                print("querying games")
+                query_Games()
+                
+            case "start-game":
+                try:
+                    player = parameters[0]
+                    num_Of_Additional_Players = int(parameters[1])
+                    num_Of_Holes = int(parameters[2])
+
+                except IndexError:
+                    print("Missing Game Parameters")
+                    player = False
+                    num_Of_Additional_Players = False
+                    num_Of_Holes = False
+
+                print("starting game")  
+                newThread = threading.Thread(target=start_Game, \
+                                             args=(player, num_Of_Additional_Players, num_Of_Holes, *clientAddress,))
+                newThread.start()
+                print(newThread.name)
+
+            case "end":
+                print("ending game")
+
+            case "de-register":
+                print("De-registering")
+                try:
+                    player = parameters[0]
+                except IndexError:
+                    print("No player name given")
+                    continue
+                
+                de_register(player, *clientAddress)
+
+            case _:
+                status_Code = "FAILURE.|command.|Invalid command.|"
+                serverSocket.sendto(status_Code.encode(), clientAddress)
+
+                print(status_Code)
+                
+except KeyboardInterrupt:
+    print("Keyboard interrupt")
+    serverSocket.close()
+    exit()
 
     #print(command, parameters, clientAddress)

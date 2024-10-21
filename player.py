@@ -1,7 +1,7 @@
 from socket import *
 import json
 
-serverName = "localhost"
+serverName = "192.168.1.2"
 serverPort = 1000
 clientSocket = socket(AF_INET, SOCK_DGRAM)
 clientSocket.settimeout(1)
@@ -12,9 +12,9 @@ def sendRequest(request):
     try:
         response, serverAddress = clientSocket.recvfrom(2048)
     except TimeoutError:
-        print("Timeout")
+        print("Timeout, no response from server")
         #homeMenu()
-        return
+        return False
 
     response = list(response.decode().split(".|", 3))
     responseFormatted = {
@@ -28,7 +28,6 @@ def sendRequest(request):
         print("\nSUCCESS", responseFormatted["response_Message"])
     elif responseFormatted["response_Status_Code"] == "FAILURE":
         print("\nFAILURE", responseFormatted["response_Message"])
-        exit()
     
     return responseFormatted
 
@@ -36,9 +35,9 @@ def registerMenu():
     player_Name = input("\nRegister a username: ")
     sendRequest("register " + player_Name)
 
-    displayHomeMenu()
+    homeMenu()
 
-def displayHomeMenu():
+def homeMenu():
     print("\nWelcome to the Game of Six Card Golf")
     print("Input the desired option that follows")
     #print("register (Player name)")
@@ -57,12 +56,20 @@ def homeMenuInputs():
 
     responseFormated = sendRequest(option_choice)
 
+    if not responseFormated\
+    or responseFormated["response_Status_Code"] == "FAILURE":
+        homeMenuInputs()
+
     if responseFormated["response_Command"] == "query-players":
         players_Data = json.loads(responseFormated["response_Data"])
 
         print("\nNumber of Players:", players_Data["Number_Of_Players"],"""\n--------------""")
         for player in players_Data["Players"]:
-            print(player)
+            print(player+",")
+            if players_Data["Players"][player]["status"] == "free":
+                print(f"\tPlace in queue:, {players_Data['Players'][player]['queue_Placement']}")
+            elif players_Data["Players"][player]["status"] == "in-play":
+                print("\tIn game")
         print()
         homeMenuInputs()
     
@@ -71,7 +78,12 @@ def homeMenuInputs():
 
         print("\nNumber of Games:", games_Data["Number_Of_Games"],"""\n--------------""")
         for game in games_Data["Games"]:
-            print(game)
+            print(game["id"])
+            print(f"    Status: {game['status']}")
+            print(f"    Players In Game ({len(game['Players'])}):")
+            for player in game["Players"]:
+                #print(player)
+                print(f"        {player['name']}, Role: {player['role']}")
         print()
         homeMenuInputs()
 
@@ -81,10 +93,7 @@ def homeMenuInputs():
     #print(response)
 
 def main():
-    try:
-        registerMenu()
-    except KeyboardInterrupt:
-        print("Exiting")
+    registerMenu()
 
 if __name__=="__main__":
     main()
